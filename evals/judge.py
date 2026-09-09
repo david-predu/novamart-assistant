@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from novamart_agent import config
 
 log = logging.getLogger(__name__)
+JUDGE_SEED = 7  # one sample, fixed seed: repeatable without lowering a Gemini 3 model's temperature
 
 
 class Claim(BaseModel):
@@ -103,7 +104,11 @@ def judge(
     answer: str,
     model: str = config.JUDGE_MODEL,
 ) -> JudgeVerdict | None:
-    """Grade one answer at temperature 0; None on any failure so the case is ERROR, never FAIL."""
+    """Grade one answer with a fixed seed; None on any failure so the case is ERROR, never FAIL.
+
+    Gemini 3 models should keep temperature at 1.0 (Google's guidance), so repeatability comes
+    from the seed and a single sample, not from temperature 0.
+    """
     prompt = JUDGE_PROMPT.format(
         question=question, context=context, reference=reference, answer=answer
     )
@@ -114,7 +119,7 @@ def judge(
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=JudgeVerdict,
-                temperature=0.0,
+                seed=JUDGE_SEED,
                 max_output_tokens=4096,
             ),
         )

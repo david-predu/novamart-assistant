@@ -24,8 +24,8 @@ APP_NAME = "novamart_agent"
 
 # Stable, free-tier model ids only. Never "-latest" aliases or dated previews
 # (they make eval results non-reproducible).
-MODEL = os.getenv("NOVAMART_MODEL", "gemini-3.5-flash")
-JUDGE_MODEL = os.getenv("NOVAMART_JUDGE_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("NOVAMART_MODEL", "gemini-3.5-flash-lite")
+JUDGE_MODEL = os.getenv("NOVAMART_JUDGE_MODEL", "gemini-3.6-flash")
 # gemini-embedding-001 supports task_type + output_dimensionality (shutdown 2028-05-14).
 EMBED_MODEL = "gemini-embedding-001"
 EMBED_DIMS = 768

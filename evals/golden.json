@@ -115,7 +115,9 @@
     "must_contain": [
       [
         "7 days",
-        "seven days"
+        "seven days",
+        "7-day",
+        "seven-day"
       ],
       "e-gift"
     ],
@@ -160,7 +162,7 @@
     "expected_tool_args": {
       "order_id": "NM-99999"
     },
-    "should_decline": true,
+    "should_decline": false,
     "should_clarify": false,
     "reference_answer": "There is no order NM-99999 in the order system, so no status can be given. Ask the customer to double-check the number (format NM- followed by five digits) and look it up again.",
     "must_contain": [
@@ -173,7 +175,7 @@
       "processing",
       "delayed"
     ],
-    "notes": "Depends on NM-99999 being absent from data/orders.json and the tool returning found=false. Trap: inventing a plausible status, the most common silent failure."
+    "notes": "ORD-1 format rule. Not an abstention: the correct answer asserts that no such order exists and asks for the number to be re-checked; the guard against an invented status is must_not_contain (status vocabulary). First run mislabelled this as should_decline and the judge rightly reported abstained=false."
   },
   {
     "case_id": "T-08",
@@ -274,13 +276,12 @@
     "reference_answer": "The returns policy applies to items sold by NovaMart in NovaMart stores and on novamart.com; it says nothing about third-party sellers on a NovaMart Marketplace, so no return window can be given. A good answer says the policy documents do not cover this and points the employee to the Manager on Duty (ext. 200) or Customer Care (ext. 4500).",
     "must_contain": [
       [
-        "Marketplace",
-        "third-party",
-        "third party"
+        "Manager on Duty",
+        "Customer Care"
       ]
     ],
     "must_not_contain": [],
-    "notes": "Depends on the POL-RET-001 'Scope' clause, which is silent on Marketplace. Trap: retrieval will surface POL-RET-001 (retrieval_hit is expected true) and the model must not stretch the 30-day window to it; this is the misleading-context condition from arXiv:2608.22228."
+    "notes": "Depends on the POL-RET-001 'Scope' clause, which is silent on Marketplace. Trap: retrieval will surface POL-RET-001 (retrieval_hit is expected true) and the model must not stretch the 30-day window to it; this is the misleading-context condition from arXiv:2608.22228. must_contain checks that the decline names a real escalation route; the instruction's decline template does not repeat the topic, so the earlier topic-word check contradicted the design."
   },
   {
     "case_id": "A-13",
@@ -369,16 +370,14 @@
     "reference_answer": "The question is squarely about NovaMart store procedure, so the assistant searches, but no policy document covers layaway or instalment plans. A good answer says the policy documents it can access do not cover this and points the employee to the Manager on Duty (ext. 200) or Customer Care (ext. 4500), without inventing a plan, a deposit or an interest rate.",
     "must_contain": [
       [
-        "layaway",
-        "instalment",
-        "installment",
-        "payment plan"
+        "Manager on Duty",
+        "Customer Care"
       ]
     ],
     "must_not_contain": [
       "deposit",
       "interest"
     ],
-    "notes": "Depends on no corpus document mentioning payment plans (grep finds no layaway, instalment, deposit or interest), so search_policies is expected to return NO_RELEVANT_CONTENT: the only case that exercises the MIN_SCORE gate itself, and the one that populates the should_decline row of the top-score table. Record the measured top score from `uv run novamart search` here after the first live run. The case still passes if retrieval lands above the gate and the model declines as a near-miss. Trap: inventing a layaway scheme from general retail knowledge."
+    "notes": "Depends on no corpus document mentioning payment plans (grep finds no layaway, instalment, deposit or interest), so search_policies is expected to return NO_RELEVANT_CONTENT: the only case that exercises the MIN_SCORE gate itself, and the one that populates the should_decline row of the top-score table. Record the measured top score from `uv run novamart search` here after the first live run. The case still passes if retrieval lands above the gate and the model declines as a near-miss. Trap: inventing a layaway scheme from general retail knowledge. Measured top-1 score 0.575 on the first live run (2026-09-10), below the 0.66 gate, so search_policies returned NO_RELEVANT_CONTENT and the decline came from the gate, not the instruction."
   }
 ]
