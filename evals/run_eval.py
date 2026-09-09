@@ -15,6 +15,8 @@ Flags:
 
 Exit codes: 0 every gate passed or was skipped; 1 a quality gate failed; 2 inconclusive
 (n_error > 0: a turn or a judge call failed, so the numbers cannot be trusted either way).
+An inconclusive run, or a partial one (--cases, --no-judge), prints its report and leaves
+evals/results untouched, so a 429 storm cannot overwrite the committed evidence.
 
 --agent-model / --judge-model work by writing the environment variables before novamart_agent
 is imported, because config.py reads the environment at import time; that is why every project
@@ -75,6 +77,7 @@ def cache_write(kind: str, key: str, data: dict) -> None:
 
 
 def git_sha() -> str:
+    """Short HEAD sha, "-dirty" when tracked files differ from HEAD; "unknown" without git."""
     try:
         done = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -83,9 +86,17 @@ def git_sha() -> str:
             text=True,
             check=True,
         )
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=EVALS_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
-    return done.stdout.strip()
+    sha = done.stdout.strip()
+    return f"{sha}-dirty" if status.stdout.strip() else sha
 
 
 async def run(args: argparse.Namespace) -> dict:
@@ -334,6 +345,21 @@ def main(argv: list[str] | None = None) -> int:
         result = json.loads(LATEST_JSON.read_text())
     else:
         result = asyncio.run(run(args))
+        # Persist only a clean full-suite run: an errored or partial run must never replace
+        # the committed evidence (the missing-key case is refused earlier, in run()).
+        skip = None
+        if result["meta"]["n_error"]:
+            skip = f"{result['meta']['n_error']} case(s) errored (inconclusive)"
+        elif args.cases or args.no_judge:
+            skip = "partial run (--cases/--no-judge)"
+        if skip:
+            print(render_markdown(result))
+            print(
+                f"{skip}: left {LATEST_JSON.name} and {LATEST_MD.name} untouched; "
+                "re-run the full suite to refresh them.",
+                file=sys.stderr,
+            )
+            return checks.exit_code(result["gates"])
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         LATEST_JSON.write_text(json.dumps(result, indent=1, ensure_ascii=False))
     markdown = render_markdown(result)

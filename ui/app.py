@@ -26,6 +26,26 @@ EXAMPLES = [
 st.set_page_config(page_title="NovaMart Store Assistant", page_icon="🛒")
 state = st.session_state
 
+
+def run_blocking(coro):
+    """Drive the session's loop from the current script thread, refusing to re-enter it.
+
+    Streamlit starts a fresh script thread per rerun (runner.fastReruns), so a click or a second
+    question during a slow turn would re-enter the one shared loop and asyncio would raise
+    "This event loop is already running". Warn and return None instead of a red traceback.
+    """
+    if state.loop.is_running():
+        coro.close()  # avoid "coroutine was never awaited"
+        st.warning("A turn is still running - wait for the answer, then try again.")
+        return None
+    try:
+        return state.loop.run_until_complete(coro)
+    except RuntimeError as exc:  # lost the (microseconds-wide) check-then-call race
+        coro.close()
+        st.error(friendly_error(f"RuntimeError: {exc}"))
+        return None
+
+
 if "runner" not in state:
     try:
         require_api_key()
@@ -35,7 +55,7 @@ if "runner" not in state:
     # The genai async client binds to the loop it first runs on, so one loop lives for the session.
     state.loop = asyncio.new_event_loop()
     state.runner = build_runner()
-    state.session_id = state.loop.run_until_complete(new_session(state.runner))
+    state.session_id = run_blocking(new_session(state.runner))
     state.history = []
 
 
@@ -55,9 +75,11 @@ def render_turn(turn: AgentTurn) -> None:
 with st.sidebar:
     st.caption(f"Model {MODEL} · retrieval gate {MIN_SCORE:.2f}")
     if st.button("New conversation"):
-        state.session_id = state.loop.run_until_complete(new_session(state.runner))
-        state.history = []
-        st.rerun()
+        sid = run_blocking(new_session(state.runner))
+        if sid is not None:  # None: a turn is still running, keep the current conversation
+            state.session_id = sid
+            state.history = []
+            st.rerun()
     st.write("Try asking:")
     for example in EXAMPLES:
         st.text(example)
@@ -75,6 +97,8 @@ if question := st.chat_input("Ask about a NovaMart policy or an order number"):
         st.text(question)
     with st.chat_message("assistant"):
         with st.spinner("Checking policies and orders..."):
-            turn = state.loop.run_until_complete(ask(state.runner, state.session_id, question))
-        render_turn(turn)
-    state.history.append(turn)
+            turn = run_blocking(ask(state.runner, state.session_id, question))
+        if turn is not None:
+            render_turn(turn)
+    if turn is not None:
+        state.history.append(turn)

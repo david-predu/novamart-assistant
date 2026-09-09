@@ -202,8 +202,9 @@ def friendly_error(err: str) -> str:
     if "429" in err or "RESOURCE_EXHAUSTED" in err:
         return (
             "Gemini free-tier quota exceeded (429). Wait a minute for per-minute limits, or until "
-            "midnight Pacific for daily limits; set NOVAMART_MODEL to a lighter model such as "
-            "gemini-3.5-flash-lite; check https://aistudio.google.com/rate-limit for this project."
+            "midnight Pacific for daily limits; each model id has its own daily bucket, so "
+            "another NOVAMART_MODEL can unblock a demo; check "
+            "https://aistudio.google.com/rate-limit for this project."
             f"\n(original error: {err})"
         )
     if "API key not valid" in err or "API_KEY_INVALID" in err or err.startswith("400"):

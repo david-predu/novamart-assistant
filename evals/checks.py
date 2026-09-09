@@ -6,7 +6,6 @@ judge verdict, every function is pure, so a run can be re-scored from evals/resu
 
 from __future__ import annotations
 
-import re
 import statistics
 from collections.abc import Callable
 from typing import Any
@@ -16,13 +15,10 @@ from pydantic import BaseModel, ConfigDict
 from novamart_agent.tools import normalise_order_id
 
 ORDER_TOOL = "get_order_status"
+# not_applicable counts as grounded, as in ADK's hallucinations_v1 _POSITIVE_LABELS: a decline or a
+# question back makes no factual claim that could be unsupported (see README, Evaluation).
 GROUNDED_LABELS = {"supported", "not_applicable"}
 FAIL_OUTCOMES = {"false_answer", "over_refusal", "guessed"}
-_DECLINE_RE = re.compile(
-    r"not covered|don.t have|do not have|can.t answer|cannot answer|check with|manager on duty"
-    r"|customer care",
-    re.IGNORECASE,
-)
 
 
 class GoldenCase(BaseModel):
@@ -115,11 +111,6 @@ def not_contains_ok(answer: str, must_not_contain: list[str]) -> bool:
     return not any(needle.lower() in lowered for needle in must_not_contain)
 
 
-def decline_heuristic(answer: str) -> bool:
-    """Regex guess at whether the answer declines. DIAGNOSTIC ONLY: the judge owns abstention."""
-    return bool(_DECLINE_RE.search(answer))
-
-
 def run_checks(case: GoldenCase, turn: dict) -> dict:
     """All deterministic checks for one recorded turn."""
     names = [call["name"] for call in turn["tool_calls"]]
@@ -132,7 +123,6 @@ def run_checks(case: GoldenCase, turn: dict) -> dict:
         "retrieval_hit": retrieval_hit(case.expected_doc_ids, turn["retrieved_doc_ids"]),
         "contains_ok": contains_ok(answer, case.must_contain),
         "not_contains_ok": not_contains_ok(answer, case.must_not_contain),
-        "decline_heuristic": decline_heuristic(answer),
     }
 
 

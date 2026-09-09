@@ -17,13 +17,13 @@ search:
 	uv run novamart search "$(Q)"
 
 ui:
-	uv run streamlit run ui/app.py
+	uv run streamlit run ui/app.py --server.address=127.0.0.1 --server.showEmailPrompt=false --browser.gatherUsageStats=false
 
 web:
 	uv run adk web novamart_agent --port 8000
 
 eval:
-	uv run python -m evals.run_eval
+	uv run python -m evals.run_eval --sleep 2
 
 eval-report:
 	uv run python -m evals.run_eval --report-only

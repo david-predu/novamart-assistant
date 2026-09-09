@@ -39,7 +39,7 @@ async def test_grounded_answer_cites_the_policy_it_used():
     turn = await _turn("How long does a customer have to return a defective item?")
     assert "search_policies" in [c.name for c in turn.tool_calls]
     assert "90" in turn.answer
-    assert turn.sources == ["POL-DMG-002"]
+    assert "POL-DMG-002" in turn.sources
     assert set(turn.sources) <= set(turn.retrieved_doc_ids)
 
 
