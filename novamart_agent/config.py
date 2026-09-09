@@ -31,7 +31,7 @@ EMBED_MODEL = "gemini-embedding-001"
 EMBED_DIMS = 768
 
 TOP_K = int(os.getenv("NOVAMART_TOP_K", "4"))
-MIN_SCORE = float(os.getenv("NOVAMART_MIN_SCORE", "0.50"))
+MIN_SCORE = float(os.getenv("NOVAMART_MIN_SCORE", "0.66"))
 
 # google-genai does NOT retry by default; share one policy across agent, embedder and judge clients.
 RETRY = types.HttpRetryOptions(
