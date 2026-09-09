@@ -20,6 +20,9 @@ META = {
     "genai_version": "2.22.0",
     "corpus_sha256": "0" * 64,
     "instruction_hash": "1" * 64,
+    "min_score": 0.5,
+    "top_k": 4,
+    "behaviour_hash": "3" * 64,
     "golden_hash": "2" * 64,
     "git_sha": "unknown",
     "n_cases": 0,
@@ -104,10 +107,12 @@ def test_tool_arg_match_takes_best_call_after_normalisation():
     assert checks.tool_arg_match(None, [order_call("NM-10432")]) is None
 
 
-def test_spurious_tool_only_for_order_lookup():
+def test_spurious_tool():
     assert checks.spurious_tool([SEARCH], [SEARCH, ORDER])
     assert not checks.spurious_tool([ORDER], [ORDER])
-    assert not checks.spurious_tool([], [SEARCH])
+    assert not checks.spurious_tool([ORDER], [SEARCH, ORDER])  # an extra search is allowed
+    assert checks.spurious_tool([], [SEARCH])  # instruction rule 6: no tool when none expected
+    assert not checks.spurious_tool([], [])
 
 
 def test_citation_valid_is_subset_or_none():
@@ -280,11 +285,31 @@ def test_render_markdown_handles_empty_and_populated_runs():
         "| PASS | - |" in report
     )
     assert "| tool_trajectory_ok | 1/1 (1.00) | 1 |" in report
+    assert "retrieval gate min_score 0.5 · top_k 4" in report
 
 
-def test_golden_file_validates_as_sixteen_cases():
+def test_render_markdown_names_the_cause_of_error_rows():
+    rows = [
+        checks.make_row(case(case_id="E-1"), turn(error="429: RESOURCE_EXHAUSTED"), None),
+        checks.make_row(case(case_id="J-1"), turn(), None),  # judge enabled, no verdict
+    ]
+    summary = checks.aggregate(rows)
+    report = run_eval.render_markdown(
+        {"meta": META, "summary": summary, "gates": checks.gates(summary), "cases": rows}
+    )
+    assert (
+        "| E-1 | grounded_single_doc | none | - | - | - | 1.0 | ERROR "
+        "| agent error: 429: RESOURCE_EXHAUSTED |" in report
+    )
+    assert (
+        "| J-1 | grounded_single_doc | none | - | - | - | 1.0 | ERROR | judge error: no verdict"
+        in report
+    )
+
+
+def test_golden_file_validates_as_seventeen_cases():
     if not GOLDEN_PATH.exists():
         pytest.skip("evals/golden.json not written yet")
     cases = [GoldenCase.model_validate(c) for c in json.loads(GOLDEN_PATH.read_text())]
-    assert len(cases) == 16
-    assert len({c.case_id for c in cases}) == 16
+    assert len(cases) == 17
+    assert len({c.case_id for c in cases}) == 17

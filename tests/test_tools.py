@@ -85,6 +85,8 @@ def orders_file(tmp_path, monkeypatch):
         ("abc", None),
         ("NM-1", None),
         ("", None),
+        (10432, "NM-10432"),  # the model may send a bare JSON number for the string param
+        (None, None),
     ],
 )
 def test_normalise_order_id(raw, expected):

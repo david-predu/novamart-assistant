@@ -5,7 +5,7 @@ Usage:
                                     [--sleep SECONDS] [--agent-model X] [--judge-model Y]
 
 Flags:
-    --cases         comma-separated case ids to run (default: all 16)
+    --cases         comma-separated case ids to run (default: all)
     --no-judge      deterministic checks only; judge-dependent metrics and gates are skipped
     --refresh       ignore evals/.cache and call the APIs again
     --report-only   re-render results/latest.md from results/latest.json with zero API calls
@@ -21,9 +21,11 @@ is imported, because config.py reads the environment at import time; that is why
 import lives inside main() and run() rather than at module level.
 
 Cache: evals/.cache/agent/<key>.json keyed by (case_id, question, agent model, instruction hash,
-corpus hash) and evals/.cache/judge/<key>.json keyed by (case_id, judge model, prompt hash, answer,
-context, reference). Changing the prompt re-judges cached answers; changing the corpus or the
-instruction invalidates the agent cache automatically. Failures are never cached.
+corpus hash, behaviour hash), where the behaviour hash covers MIN_SCORE, TOP_K, data/orders.json
+and the two tool docstrings; evals/.cache/judge/<key>.json keyed by (case_id, judge model, prompt
+hash, answer, context, reference). Changing the judge prompt re-judges cached answers; changing
+the corpus, the instruction, the retrieval gate, the order data or a tool description re-runs the
+agent (and then the judge) automatically. Failures are never cached.
 """
 
 from __future__ import annotations
@@ -92,7 +94,7 @@ async def run(args: argparse.Namespace) -> dict:
     import google.genai
 
     from evals import checks, judge
-    from novamart_agent import agent, config, corpus, runtime
+    from novamart_agent import agent, config, corpus, runtime, tools
 
     try:
         runtime.require_api_key()
@@ -107,6 +109,12 @@ async def run(args: argparse.Namespace) -> dict:
         cases = [c for c in cases if c.case_id in wanted]
     instruction_hash = _sha(agent.INSTRUCTION)
     corpus_hash = corpus.corpus_sha256(corpus.load_chunks())
+    # Everything else that changes what the agent sees or gets back but is not hashed above.
+    behaviour_hash = _sha(
+        f"min_score={config.MIN_SCORE}|top_k={config.TOP_K}|"
+        f"{config.ORDERS_PATH.read_text(encoding='utf-8')}|"
+        f"{tools.search_policies.__doc__}|{tools.get_order_status.__doc__}"
+    )
     prompt_hash = _sha(judge.JUDGE_PROMPT)
     judge_on = not args.no_judge
     meta = {
@@ -117,6 +125,9 @@ async def run(args: argparse.Namespace) -> dict:
         "genai_version": google.genai.__version__,
         "corpus_sha256": corpus_hash,
         "instruction_hash": instruction_hash,
+        "min_score": config.MIN_SCORE,
+        "top_k": config.TOP_K,
+        "behaviour_hash": behaviour_hash,
         "golden_hash": hashlib.sha256(golden_bytes).hexdigest(),
         "git_sha": git_sha(),
         "n_cases": len(cases),
@@ -127,7 +138,12 @@ async def run(args: argparse.Namespace) -> dict:
     try:
         for case in cases:
             key = cache_key(
-                case.case_id, case.question, config.MODEL, instruction_hash, corpus_hash
+                case.case_id,
+                case.question,
+                config.MODEL,
+                instruction_hash,
+                corpus_hash,
+                behaviour_hash,
             )
             turn = None if args.refresh else cache_read("agent", key)
             if turn is not None:
@@ -197,6 +213,11 @@ def _case_line(row: dict) -> str:
     reasons = ", ".join(row["fail_reasons"])
     if row["flags"]:
         reasons = f"{reasons} [flags: {', '.join(row['flags'])}]".strip()
+    # An aborted turn has no meaningful deterministic reasons: show the cause instead.
+    if row.get("error"):
+        reasons = f"agent error: {row['error'][:60]}"
+    elif row.get("judge_error"):
+        reasons = "judge error: no verdict (safety block, truncation or API failure; see stderr)"
     cells = [
         row["case_id"],
         row["category"],
@@ -225,7 +246,8 @@ def render_markdown(result: dict) -> str:
         f"- run: {meta['run_at']} (git {meta['git_sha']}) · cases: {meta['n_cases']}",
         (
             f"- agent model: `{meta['agent_model']}` · judge model: "
-            f"`{meta['judge_model'] or 'disabled (--no-judge)'}`"
+            f"`{meta['judge_model'] or 'disabled (--no-judge)'}` · retrieval gate min_score "
+            f"{meta.get('min_score', '?')} · top_k {meta.get('top_k', '?')}"
         ),
         f"- google-adk {meta['adk_version']} · google-genai {meta['genai_version']}",
         (

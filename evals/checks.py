@@ -78,7 +78,13 @@ def tool_arg_match(expected_args: dict[str, Any] | None, tool_calls: list[dict])
 
 
 def spurious_tool(expected_tools: list[str], actual_names: list[str]) -> bool:
-    """get_order_status was called without being expected; search_policies is never spurious."""
+    """A tool the case did not expect was called.
+
+    When the case expects no tool at all (off-topic, injection, clarification: instruction rule 6)
+    any call is spurious; otherwise only get_order_status is, an extra search is allowed.
+    """
+    if not expected_tools:
+        return bool(actual_names)
     return ORDER_TOOL in actual_names and ORDER_TOOL not in expected_tools
 
 

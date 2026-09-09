@@ -54,7 +54,7 @@ class AgentTurn:
     error: str | None
     model: str
     model_calls: int
-    usage: dict | None
+    usage: dict | None  # token counters summed over the turn's model calls
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
@@ -109,7 +109,7 @@ async def ask(
     tool_responses: list[ToolResponse] = []
     texts: list[str] = []
     model_calls = 0
-    usage = None
+    usage: dict[str, int] = {}
     error = None
     try:
         async for event in runner.run_async(
@@ -126,8 +126,20 @@ async def ask(
                     "".join(p.text for p in event.content.parts if p.text and not p.thought)
                 )
             meta = getattr(event, "usage_metadata", None)
-            if meta is not None:
-                usage = meta.model_dump(exclude_none=True) if hasattr(meta, "model_dump") else None
+            if meta is not None and not event.partial:
+                # One entry per model call; summing the integer counters gives the turn's real
+                # cost (the per-modality detail lists are not additive and are dropped).
+                for key, value in meta.model_dump(exclude_none=True).items():
+                    if isinstance(value, int):
+                        usage[key] = usage.get(key, 0) + value
+            if event.error_code and not error:
+                # ADK reports model-level failures (SAFETY, MAX_TOKENS, no content) as events,
+                # not exceptions; without this the turn would look like an empty success.
+                error = (
+                    f"{event.error_code}: {event.error_message}"
+                    if event.error_message
+                    else str(event.error_code)
+                )
     except errors.APIError as e:
         error = f"{e.code}: {e.message}"
     except Exception as e:  # noqa: BLE001 - a turn must always come back with its error
@@ -145,7 +157,7 @@ async def ask(
         error=error,
         model=config.MODEL,
         model_calls=model_calls,
-        usage=usage,
+        usage=usage or None,
     )
 
 
@@ -182,16 +194,22 @@ def top_score(tool_responses: list[ToolResponse]) -> float | None:
 
 
 def friendly_error(err: str) -> str:
-    """Translate the two errors a free-tier user is most likely to hit into next steps."""
+    """Translate the two errors a free-tier user is most likely to hit into next steps.
+
+    The original message is kept: a 400 can also be an unsupported thinking level or an
+    oversized request, and the advice must never hide the real cause.
+    """
     if "429" in err or "RESOURCE_EXHAUSTED" in err:
         return (
             "Gemini free-tier quota exceeded (429). Wait a minute for per-minute limits, or until "
             "midnight Pacific for daily limits; set NOVAMART_MODEL to a lighter model such as "
             "gemini-3.5-flash-lite; check https://aistudio.google.com/rate-limit for this project."
+            f"\n(original error: {err})"
         )
     if "API key not valid" in err or "API_KEY_INVALID" in err or err.startswith("400"):
         return (
-            "Gemini rejected the key: create a fresh key at https://aistudio.google.com/apikey "
-            "and paste it into .env"
+            "Gemini rejected the request, most often because of an old or invalid key: create a "
+            "fresh key at https://aistudio.google.com/apikey and paste it into .env"
+            f"\n(original error: {err})"
         )
     return err

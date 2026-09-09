@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import NoReturn
 
 import typer
 
@@ -51,6 +52,13 @@ def _print_turn(turn: AgentTurn) -> None:
 
 def _report_error(turn: AgentTurn) -> None:
     typer.secho(runtime.friendly_error(turn.error or ""), fg=typer.colors.RED, err=True)
+
+
+def _fail(exc: Exception) -> NoReturn:
+    """Report a failure as one red line and exit 1, like `ask` does; never a traceback."""
+    message = runtime.friendly_error(f"{type(exc).__name__}: {exc}")
+    typer.secho(message, fg=typer.colors.RED, err=True)
+    raise typer.Exit(1) from None
 
 
 async def _one_shot(question: str) -> AgentTurn:
@@ -120,7 +128,10 @@ def search(
     _preflight()
     from .retrieval import get_index
 
-    hits = get_index().search(query, k=k)
+    try:  # a stale index, a rejected key or an exhausted embedding quota all land here
+        hits = get_index().search(query, k=k)
+    except Exception as e:  # noqa: BLE001
+        _fail(e)
     for hit in hits:
         typer.echo(f"{hit.score:.3f}  {hit.chunk.chunk_id}  {hit.chunk.section}")
     top = float(hits[0].score) if hits else 0.0
@@ -138,6 +149,9 @@ def index(
     _preflight()
     from .retrieval import get_index
 
-    idx = get_index(force_rebuild=force)
+    try:
+        idx = get_index(force_rebuild=force)
+    except Exception as e:  # noqa: BLE001
+        _fail(e)
     n_docs = len({chunk.doc_id for chunk in idx.chunks})
     typer.echo(f"{len(idx.chunks)} chunks from {n_docs} docs -> {config.INDEX_PATH}")

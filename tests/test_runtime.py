@@ -1,6 +1,9 @@
 """Offline tests for runtime helpers and ask() against a fake runner emitting real ADK events."""
 
 import json
+import os
+import subprocess
+import sys
 
 import pytest
 from google.adk.events import Event
@@ -77,6 +80,8 @@ def test_top_score():
         ("ClientError: RESOURCE_EXHAUSTED", "midnight Pacific"),
         ("400: API key not valid. Please pass a valid API key.", "aistudio.google.com/apikey"),
         ("ClientError: API_KEY_INVALID", "fresh key"),
+        # a non-key 400 keeps its own text so the advice cannot hide the real cause
+        ("400: The input token count exceeds the maximum", "input token count exceeds"),
         ("RuntimeError: boom", "RuntimeError: boom"),
     ],
 )
@@ -102,15 +107,31 @@ def test_require_api_key_accepts_gemini_var_and_warns_on_backend_flag(monkeypatc
         require_api_key()
 
 
-def test_import_without_key(monkeypatch):
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+def test_root_agent_wiring():
     from novamart_agent.agent import INSTRUCTION, root_agent
 
     assert len(root_agent.tools) == 2
     assert {t.__name__ for t in root_agent.tools} == {"search_policies", "get_order_status"}
     assert "NOVAMART-SYS-CANARY-4187" in INSTRUCTION
     assert root_agent.name == "novamart_assistant"
+
+
+def test_agent_imports_without_api_key():
+    """A fresh interpreter, not monkeypatch: this module already imported the agent at collection.
+
+    Empty strings rather than unset vars, because config.load_dotenv(override=False) leaves an
+    existing variable alone and would otherwise re-inject a developer's .env key.
+    """
+    env = {**os.environ, "GOOGLE_API_KEY": "", "GEMINI_API_KEY": ""}
+    done = subprocess.run(
+        [sys.executable, "-c", "import novamart_agent.agent"],
+        env=env,
+        cwd=config.ROOT,
+        capture_output=True,
+        text=True,
+        check=False,  # the assertion below reports stderr, which check=True would hide
+    )
+    assert done.returncode == 0, done.stderr
 
 
 def _model_event(*parts: types.Part, partial: bool = False, usage=None) -> Event:
@@ -142,15 +163,25 @@ class FakeRunner:
 
 
 async def test_ask_folds_events_into_turn():
-    usage = types.GenerateContentResponseUsageMetadata(prompt_token_count=10, total_token_count=15)
+    usage_call = types.GenerateContentResponseUsageMetadata(
+        prompt_token_count=10, total_token_count=15
+    )
+    usage_answer = types.GenerateContentResponseUsageMetadata(
+        prompt_token_count=30,
+        candidates_token_count=5,
+        total_token_count=35,
+        prompt_tokens_details=[types.ModalityTokenCount(modality="TEXT", token_count=30)],
+    )
     call = types.Part(
         function_call=types.FunctionCall(name="get_order_status", args={"order_id": "10432"})
     )
     events = [
-        _model_event(call),
+        _model_event(call, usage=usage_call),
         _tool_event("get_order_status", {"found": True, "status": "SHIPPED"}),
         _model_event(types.Part(text="Order NM-10432 has "), partial=True),
-        _model_event(types.Part(text="Order NM-10432 has SHIPPED.\nSources: none"), usage=usage),
+        _model_event(
+            types.Part(text="Order NM-10432 has SHIPPED.\nSources: none"), usage=usage_answer
+        ),
     ]
     runner = FakeRunner(events)
     turn = await ask(runner, "sess1", "Where is 10432?")
@@ -162,7 +193,12 @@ async def test_ask_folds_events_into_turn():
     assert turn.answer == "Order NM-10432 has SHIPPED.\nSources: none"
     assert turn.sources == [] and turn.retrieved_doc_ids == [] and turn.top_score is None
     assert turn.model_calls == 2
-    assert turn.usage == {"prompt_token_count": 10, "total_token_count": 15}
+    # summed over both model calls; the per-modality detail list is dropped
+    assert turn.usage == {
+        "prompt_token_count": 40,
+        "candidates_token_count": 5,
+        "total_token_count": 50,
+    }
     assert turn.error is None and turn.model == config.MODEL and turn.latency_s >= 0
     as_dict = turn.to_dict()
     assert as_dict["tool_calls"] == [{"name": "get_order_status", "args": {"order_id": "10432"}}]
@@ -177,3 +213,12 @@ async def test_ask_captures_api_error_and_generic_error():
     assert turn.error == "429: quota" and turn.answer == ""
     turn = await ask(FakeRunner(exc=RuntimeError("boom")), "s", "hi")
     assert turn.error == "RuntimeError: boom"
+
+
+async def test_ask_surfaces_model_errors_reported_as_events():
+    """ADK reports safety blocks, truncation and empty responses as events, not exceptions."""
+    blocked = Event(author="novamart_assistant", error_code="SAFETY", error_message="blocked")
+    turn = await ask(FakeRunner([blocked]), "s", "hi")
+    assert turn.error == "SAFETY: blocked" and turn.answer == "" and turn.usage is None
+    truncated = Event(author="novamart_assistant", error_code="MAX_TOKENS")
+    assert (await ask(FakeRunner([truncated]), "s", "hi")).error == "MAX_TOKENS"

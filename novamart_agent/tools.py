@@ -43,7 +43,8 @@ _NO_RELEVANT_MESSAGE = (
 
 def normalise_order_id(raw: str) -> str | None:
     """Return the canonical "NM-#####" form of an order number, or None if it is malformed."""
-    compact = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
+    # str(): the model can send a bare JSON number for a string-typed parameter (case T-08).
+    compact = re.sub(r"[^A-Za-z0-9]", "", str(raw)).upper()
     if compact.isdigit():
         compact = "NM" + compact
     match = _ORDER_ID.fullmatch(compact)
