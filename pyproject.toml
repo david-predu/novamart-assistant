@@ -37,7 +37,10 @@ addopts = "-m 'not live'"
 pythonpath = ["."]
 testpaths = ["tests"]
 markers = ["live: calls the Gemini API (needs GOOGLE_API_KEY); deselected by default"]
-filterwarnings = ["ignore::UserWarning"]
+filterwarnings = ["ignore::UserWarning", "ignore::DeprecationWarning"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint.per-file-ignores]
+"novamart_agent/__init__.py" = ["F401"]  # ADK requires exactly `from . import agent`

@@ -3,6 +3,7 @@
 Every entry point (ADK CLI, our CLI, Streamlit, the eval harness, pytest) imports this
 module first, so `.env` is loaded exactly once. Shell environment wins over `.env`.
 """
+
 from __future__ import annotations
 
 import os
@@ -21,10 +22,12 @@ INDEX_PATH = ROOT / "data" / "index" / "policy_index.json"
 # Must equal the package folder name, otherwise ADK's Runner logs an "App name mismatch" warning.
 APP_NAME = "novamart_agent"
 
-# Stable, free-tier model ids only. Never "-latest" aliases or dated previews (non-reproducible evals).
+# Stable, free-tier model ids only. Never "-latest" aliases or dated previews
+# (they make eval results non-reproducible).
 MODEL = os.getenv("NOVAMART_MODEL", "gemini-3.5-flash")
 JUDGE_MODEL = os.getenv("NOVAMART_JUDGE_MODEL", "gemini-2.5-flash")
-EMBED_MODEL = "gemini-embedding-001"  # supports task_type + output_dimensionality; shutdown 2028-05-14
+# gemini-embedding-001 supports task_type + output_dimensionality (shutdown 2028-05-14).
+EMBED_MODEL = "gemini-embedding-001"
 EMBED_DIMS = 768
 
 TOP_K = int(os.getenv("NOVAMART_TOP_K", "4"))

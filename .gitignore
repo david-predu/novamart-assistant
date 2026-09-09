@@ -12,3 +12,4 @@ __pycache__/
 evals/.cache/
 # the case brief is not part of the deliverable
 Take-Home_Case_Study_-_Gemini_Enterprise.docx.pdf
+.idea/
