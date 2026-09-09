@@ -1,0 +1,14 @@
+# secrets
+.env
+# environments / caches
+.venv/
+.adk/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.streamlit/
+.DS_Store
+evals/.cache/
+# the case brief is not part of the deliverable
+Take-Home_Case_Study_-_Gemini_Enterprise.docx.pdf
