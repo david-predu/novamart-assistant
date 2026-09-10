@@ -1,6 +1,6 @@
 # NovaMart assistant — eval report
 
-- run: 2026-09-09T22:08:17+00:00 (git e981ba3) · cases: 17
+- run: 2026-09-09T22:08:17+00:00 (git 3166fb2) · cases: 17
 - agent model: `gemini-3.5-flash-lite` · judge model: `gemini-3.6-flash` · retrieval gate min_score 0.66 · top_k 4
 - google-adk 2.8.0 · google-genai 2.22.0
 - corpus sha256 `c81ea5335ca1` · instruction sha256 `0e7222d84f0d` · golden sha256 `4449de5533b0`

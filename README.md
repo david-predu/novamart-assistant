@@ -95,7 +95,7 @@ Two results deserve a caveat; both are worked through in [`docs/eval_notes.md`](
 <!-- EVAL_RESULTS_START -->
 Results of the committed run (`evals/results/latest.md`): 17 answers on `gemini-3.5-flash-lite` and 17 verdicts on `gemini-3.6-flash`, produced live on 2026-09-10 (32 agent calls, 17 judge calls), then re-rendered from the cache after the golden-set corrections above, which is why the header shows zero live calls and 34 cache hits. The run is identified by its corpus, instruction, behaviour and golden hashes, which all match the current tree.
 
-- run: 2026-09-09T22:08:17+00:00 (git e981ba3) · cases: 17
+- run: 2026-09-09T22:08:17+00:00 (git 3166fb2) · cases: 17
 - agent model: `gemini-3.5-flash-lite` · judge model: `gemini-3.6-flash` · retrieval gate min_score 0.66 · top_k 4
 - google-adk 2.8.0 · google-genai 2.22.0
 - corpus sha256 `c81ea5335ca1` · instruction sha256 `0e7222d84f0d` · golden sha256 `4449de5533b0`

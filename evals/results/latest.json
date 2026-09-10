@@ -11,7 +11,7 @@
   "top_k": 4,
   "behaviour_hash": "817e36d9fd184557b4c500e0dc8310ca7477bff08b20f6f3490bf00e94eccc76",
   "golden_hash": "4449de5533b000dbbeedc112a7ede634c258b1a4d7763a5675c6deae2ccc8200",
-  "git_sha": "e981ba3",
+  "git_sha": "3166fb2",
   "n_cases": 17,
   "agent_model_calls": 0,
   "judge_calls": 0,
